@@ -7,7 +7,7 @@ import numpy as np
 import subprocess
 import time
 
-CPU_STAT = "cat /proc/stat | grep 'cpu[0-9]' | awk{'print $2, $3, $4, $5, $6, $7, $8, $9, $10'}"
+CPU_STAT = "cat /proc/stat | grep 'cpu[0-9]' | awk {'print $2, $3, $4, $5, $6, $7, $8, $9, $10'}"
 GPU_STAT = "nvidia-smi | grep Default | awk {'print $3, $9, $11, $13'}"
 MEM_STAT = "free -m | grep m | awk {'print $2, $3'}"
 
