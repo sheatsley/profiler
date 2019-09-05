@@ -7,9 +7,12 @@ import numpy as np
 import subprocess
 import time
 
-CPU_STAT = "cat /proc/stat | grep 'cpu[0-9]' | awk {'print $2, $3, $4, $5, $6, $7, $8, $9, $10'}"
+CPU_STAT = (
+    "cat /proc/stat | grep 'cpu[0-9]' | awk {'print $2, $3, $4, $5, $6, $7, $8, $9'}"
+)
 GPU_STAT = "nvidia-smi | grep Default | awk {'print $3, $9, $11, $13'}"
 MEM_STAT = "free -m | grep m | awk {'print $2, $3'}"
+GPU_COL = [" RAM", " TMP", " GPU", "VRAM"]
 
 
 def module_start():
@@ -28,40 +31,35 @@ def profile(refresh=0.5):
     num_cpus = int(
         subprocess.run(["nproc"], stdout=subprocess.PIPE).stdout.decode("utf-8")
     )
-    cpu_util, old = cpu_utilization([[0] * 9] * num_cpus)
+    cpu_util, old = cpu_utilization([[1] * CPU_STAT.count("$")] * num_cpus)
     while True:
 
         # obtain metrics
         mem_util = mem_utilization()
-        cpu_util, old = cpu_utlization(old)
+        cpu_util, old = cpu_utilization(old)
         gpu_temp, gpu_mem, gpu_util = gpu_utilization()
 
         # compute bars
         bars = compute_bars([cpu_util, gpu_util, gpu_mem, mem_util])
 
         # render bars (and auxiliary measurements)
-        render(bars[0], bars[1], bars[2], gpu_temp)
+        render(bars[0], [bars[3], gpu_temp, bars[1], bars[2]])
 
         # wait for refresh
         time.sleep(refresh)
     return
 
 
-def render(cpu, gpu, mem, gpu_temp, rx=0, ry=0):
+def render(cpu, gpu_mem, rx="0", ry="0"):
     """
     Writes bars (strings) to STDOUT, resets cursor to rx, ry
     Assumes stat order is CPU, GPU, MEM
     """
 
     # write bars to STDOUT
-    gpu.append(gpu_temp)
-    for b, i in enumerate(itertools.zip_longest(cpu, gpu, mem, fillvalue="")):
+    for i, b in enumerate(itertools.zip_longest(cpu, gpu_mem, fillvalue="")):
         print(
-            "CPU",
-            i,
-            b[0],
-            *("GPU ", i, b[1]) if bool(b[1]) else ("",),
-            *("MEM ", i, b[2]) if bool(b[2]) else ("",)
+            "CPU", str(i).rjust(2), b[0], *(GPU_COL[i], b[1]) if bool(b[1]) else ("",)
         )
 
     # reset cursor position
@@ -80,11 +78,16 @@ def compute_bars(metrics, ticks=30):
         if type(metric) is list:
             bar = []
             for m in metric:
-                b = "[" + "|" * int(ticks * m) + " " * int(ticks * (1 - m)) + "]"
+                b = "[" + "|" * int(ticks * m) + " " * int(ticks * (1.03 - m)) + "]"
                 bar.append(b)
             bars.append(bar)
         else:
-            bars.append("[" + "|" * int(ticks * m) + " " * int(ticks * (1 - m)) + "]")
+            bars.append(
+                "["
+                + "|" * int(ticks * metric)
+                + " " * int(ticks * (1.03 - metric))
+                + "]"
+            )
     return bars
 
 
@@ -94,11 +97,11 @@ def gpu_utilization():
     """
     temp, mem_used, mem_total, gpu_utilization = (
         subprocess.run(GPU_STAT, shell=True, stdout=subprocess.PIPE)
-        .stdout.decdoe("utf-8")
+        .stdout.decode("utf-8")
         .split(" ")
     )
-    mem_utilization = int(mem_used.strip("MiB")) / int(mem_total.strip("MiB")) * 100
-    return float(temp[:-1]), mem_utilization, float(gpu_utilization[:-1])
+    mem_utilization = int(mem_used.strip("MiB")) / int(mem_total.strip("MiB"))
+    return float(temp[:-1]), mem_utilization, float(gpu_utilization[:-2])
 
 
 def cpu_utilization(old):
@@ -107,7 +110,7 @@ def cpu_utilization(old):
     total = user + nice + system + idle + iowait + irq + softirq + steal
     nbusy = idle + iowait
     usage = total - nbusy
-    percentage = usage / total * 100
+    percentage = usage / total
     """
     new = (
         subprocess.run(CPU_STAT, shell=True, stdout=subprocess.PIPE)
@@ -115,11 +118,11 @@ def cpu_utilization(old):
         .splitlines()
     )
     new = np.array([cpu.split(" ") for cpu in new], dtype=int)
-    user, nice, system, idle, iowait, irq, softirq, steal = np.subtract(old, new)
+    user, nice, system, idle, iowait, irq, softirq, steal = np.subtract(new, old).T
     total = user + nice + system + idle + iowait + irq + softirq + steal
     nbusy = idle + iowait
     usage = total - nbusy
-    return usage / total * 100, new
+    return list(np.nan_to_num(usage / total)), new
 
 
 def mem_utilization():
@@ -131,7 +134,7 @@ def mem_utilization():
         .stdout.decode("utf-8")
         .split(" ")
     )
-    return int(usage) / int(total) * 100
+    return int(usage) / int(total)
 
 
 if __name__ == "__main__":
