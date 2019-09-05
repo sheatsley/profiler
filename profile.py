@@ -2,8 +2,10 @@
 Prints various performance metrics of your system in real-time
 """
 
+import itertools
 import numpy as np
 import subprocess
+import time
 
 CPU_STAT = [
     "cat",
@@ -39,28 +41,94 @@ GPU_STAT = [
 MEM_STAT = ["free", "-m", "|", "grep", "m", "|", "awk", "{'print", "$2,", "$3'}"]
 
 
-def profile():
+def module_start():
     """
-    Prints CPU, RAM, and GPU utilization
+    The Magic Sauce
     """
     return
 
 
-def bars(metric, ticks=30):
+def profile(refresh=0.5):
     """
-    Return bars for the utilization of a given metric
+    Prints CPU, RAM, and GPU utilization at refresh rate
     """
-    
-    # metric should be a list if we're dealing with something like CPU cores
-    if type(metric) is list:
-        bars = []
-        for m in metric:
 
+    # initialize CPU utilization to 0 and grab num_cpus
+    cpu_util, old = cpu_utilization([0] * 8)
+    NUM_CPUS = len(cpu_util)
+    while True:
 
+        # obtain metrics
+        mem_util = mem_utilization()
+        cpu_util, old = cpu_utlization(old)
+        gpu_temp, gpu_mem, gpu_util = gpu_utilization()
+
+        # compute bars
+        bars = compute_bars([cpu_util, gpu_util, gpu_mem, mem_util])
+
+        # render bars (and auxiliary measurements)
+        render(bars[0], bars[1], bars[2], gpu_temp)
+
+        # wait for refresh
+        time.sleep(refresh)
     return
 
 
-def cpu_utilization(old, new):
+def render(cpu, gpu, mem, gpu_temp, rx=0, ry=0):
+    """
+    Writes bars (strings) to STDOUT, resets cursor to rx, ry
+    Assumes stat order is CPU, GPU, MEM
+    """
+
+    # write bars to STDOUT
+    gpu.append(gpu_temp)
+    for b, i in enumerate(itertools.zip_longest(cpu, gpu, mem, fillvalue="")):
+        print(
+            "CPU",
+            i,
+            b[0],
+            *("GPU ", i, b[1]) if bool(b[1]) else ("",),
+            *("MEM ", i, b[2]) if bool(b[2]) else ("",)
+        )
+
+    # reset cursor position
+    print("\033[" + rx + ";" + ry + "H")
+    return
+
+
+def compute_bars(metrics, ticks=30):
+    """
+    Return bars for the utilization of a given metrics
+    """
+    bars = []
+    for metric in metrics:
+
+        # metric should be a list if we're dealing with something like CPU cores
+        if type(metric) is list:
+            bar = []
+            for m in metric:
+                b = "[" + "|" * int(ticks * m) + " " * int(ticks * (1 - m)) + "]"
+                bar.append(b)
+            bars.append(bar)
+        else:
+            bars.append("[" + "|" * int(ticks * m) + " " * int(ticks * (1 - m)) + "]")
+    return bars
+
+
+def gpu_utilization():
+    """
+    Compute GPU utilziation from nvidia-smi
+    """
+    temp, mem_used, mem_total, gpu_utilization = (
+        subprocess.run(GPU_STAT, stdout=subprocess.PIPE)
+        .stdout.decdoe("utf-8")
+        .split(" ")
+    )
+    mem_utilization = int(mem_used.strip("MiB")) / int(mem_total.strip("MiB")) * 100
+    return float(temp[:-1]), mem_utilization, float(gpu_utilization[:-1])
+
+
+def cpu_utilization(old):
     """
     Compute CPU utilization from /proc/stat via:
     total = user + nice + system + idle + iowait + irq + softirq + steal
@@ -74,22 +142,7 @@ def cpu_utilization(old, new):
     total = user + nice + system + idle + iowait + irq + softirq + steal
     nbusy = idle + iowait
     usage = total - nbusy
-    return str(usage / total * 100) + "%"
-
-
-def gpu_utilization():
-    """
-    Compute GPU utilziation from nvidia-smi
-    """
-    temp, mem_used, mem_total, gpu_utilization = (
-        subprocess.run(GPU_STAT, stdout=subprocess.PIPE)
-        .stdout.decdoe("utf-8")
-        .split(" ")
-    )
-    mem_utilization = (
-        str(int(mem_used.strip("MiB")) / int(mem_total.strip("MiB")) * 100) + "%"
-    )
-    return temp, mem_utilization, gpu_utilization
+    return usage / total * 100, new
 
 
 def mem_utilization():
@@ -101,11 +154,12 @@ def mem_utilization():
         .stdout.decode("utf-8")
         .split(" ")
     )
-    return str(int(usage) / int(total) * 100) + "%"
+    return int(usage) / int(total) * 100
 
 
 if __name__ == "__main__":
-
-    # grab initial CPU stats
-
-    return
+    """
+    For debugging only
+    """
+    profile()
+    raise SystemExit(0)
