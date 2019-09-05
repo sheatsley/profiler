@@ -7,38 +7,9 @@ import numpy as np
 import subprocess
 import time
 
-CPU_STAT = [
-    "cat",
-    "/proc/stat",
-    "|",
-    "grep",
-    "'cpu[0-9]'",
-    "|",
-    "awk" "{'print",
-    "$2,",
-    "$3,",
-    "$4,",
-    "$5,",
-    "$6,",
-    "$7,",
-    "$8,",
-    "$9,",
-    "$10'}",
-]
-GPU_STAT = [
-    "nvidia-smi",
-    "|",
-    "grep",
-    "Default",
-    "|",
-    "awk",
-    "{'print",
-    "$3,",
-    "$9,",
-    "$11,",
-    "$13'}",
-]
-MEM_STAT = ["free", "-m", "|", "grep", "m", "|", "awk", "{'print", "$2,", "$3'}"]
+CPU_STAT = "cat /proc/stat | grep 'cpu[0-9]' | awk{'print $2, $3, $4, $5, $6, $7, $8, $9, $10'}"
+GPU_STAT = "nvidia-smi | grep Default | awk {'print $3, $9, $11, $13'}"
+MEM_STAT = "free -m | grep m | awk {'print $2, $3'}"
 
 
 def module_start():
@@ -120,7 +91,7 @@ def gpu_utilization():
     Compute GPU utilziation from nvidia-smi
     """
     temp, mem_used, mem_total, gpu_utilization = (
-        subprocess.run(GPU_STAT, stdout=subprocess.PIPE)
+        subprocess.run(GPU_STAT, shell=True, stdout=subprocess.PIPE)
         .stdout.decdoe("utf-8")
         .split(" ")
     )
@@ -136,7 +107,9 @@ def cpu_utilization(old):
     usage = total - nbusy
     percentage = usage / total * 100
     """
-    new = subprocess.run(CPU_STAT, stdout=subprocess.PIPE).stdout.readlines()
+    new = subprocess.run(CPU_STAT, shell=True, stdout=subprocess.PIPE).stdout.decode(
+        "utf-8"
+    )
     new = np.array([cpu.split(" ") for cpu in new], dtype=int)
     user, nice, system, idle, iowait, irq, softirq, steal = np.subtract(old, new)
     total = user + nice + system + idle + iowait + irq + softirq + steal
@@ -150,7 +123,7 @@ def mem_utilization():
     Compute memory utilization from free -m
     """
     total, usage = (
-        subprocess.run(MEM_STAT, stdout=subprocess.PIPE)
+        subprocess.run(MEM_STAT, shell=True, stdout=subprocess.PIPE)
         .stdout.decode("utf-8")
         .split(" ")
     )
