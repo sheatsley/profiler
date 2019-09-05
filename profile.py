@@ -107,8 +107,10 @@ def cpu_utilization(old):
     usage = total - nbusy
     percentage = usage / total * 100
     """
-    new = subprocess.run(CPU_STAT, shell=True, stdout=subprocess.PIPE).stdout.decode(
-        "utf-8"
+    new = (
+        subprocess.run(CPU_STAT, shell=True, stdout=subprocess.PIPE)
+        .stdout.decode("utf-8")
+        .splitlines()
     )
     new = np.array([cpu.split(" ") for cpu in new], dtype=int)
     user, nice, system, idle, iowait, irq, softirq, steal = np.subtract(old, new)
