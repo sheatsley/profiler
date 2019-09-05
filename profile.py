@@ -25,8 +25,8 @@ def profile(refresh=0.5):
     """
 
     # initialize CPU utilization to 0 and grab num_cpus
-    cpu_util, old = cpu_utilization([0] * 8)
-    NUM_CPUS = len(cpu_util)
+    num_cpus = subprocess.run(["nproc"], stdout=subprocess.PIPE).stdout.decode("utf-8")
+    cpu_util, old = cpu_utilization([0] * num_cpus)
     while True:
 
         # obtain metrics
