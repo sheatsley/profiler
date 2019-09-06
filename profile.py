@@ -7,6 +7,7 @@ import itertools
 import numpy as np
 import shutil
 import subprocess
+import sys
 import time
 import threading
 
@@ -18,7 +19,22 @@ MEM_STAT = "free -m | grep m | awk {'print $2, $3'}"
 GPU_COL = [" RAM", " TMP", " GPU", "VRAM"]
 
 
-def module_start(ticks=30, refresh=0.5, ry=0):
+class StdOutWrapper:
+    text = ""
+
+    def write(self, txt):
+        self.text += txt
+        self.text = "\n".join(self.text.split("\n")[-30:])
+
+    def get_text(self):
+        return "\n".join(self.text.split("\n"))
+
+
+mystdout = StdOutWrapper()
+sys.stdout = mystdout
+
+
+def module_start(ticks=30, refresh=0.5, rx=0, ry=0):
     """
     Handler for the profiler (using curses). 
     Params:
@@ -27,25 +43,37 @@ def module_start(ticks=30, refresh=0.5, ry=0):
     - ry: space between the top of the terminal and profiler
     """
 
-    # initialize curses
-    stdscr = curses.initscr()
-
     # grab CPU count
     num_cpus = int(
         subprocess.run(["nproc"], stdout=subprocess.PIPE).stdout.decode("utf-8")
     )
 
     # compute profiler placement on right side of terminal (_CPU_XX_[ticks]_VRAM_[ticks]_)
-    height = max(num_cpus, len(GPU_COL)) + 1
+    height = max(num_cpus, len(GPU_COL)) + 2
     length = ticks * 2 + 19
-    rx = curses.COLS - length
 
     # create curses window
-    win = curses.newwin(height, length, ry, rx)
-    profile(win, ticks, refresh, rx, ry)
-    #p = threading.Thread(target=profile, args=(win, ticks, refresh, rx, ry))
-    #p.start()
-    return stdscr
+    if True:
+        win = curses.newwin(height, length, ry, rx)
+        win.box()
+        p = threading.Thread(target=profile, args=(win, ticks, refresh, rx, ry), daemon=True)
+        p.start()
+
+    if True:
+        mw = curses.newwin(curses.LINES - height, curses.COLS, ry + height+20, rx)
+        mw.scrollok(True)
+        #mw.box()
+        m = threading.Thread(target=main_update, args=(mw,), daemon=True)
+        m.start()
+
+    return
+
+
+def main_update(mw):
+    while True:
+        mw.addstr(mystdout.get_text())
+        mw.refresh()
+    return
 
 
 def profile(win, ticks, refresh=0.5, rx="0", ry="0"):
@@ -69,23 +97,25 @@ def profile(win, ticks, refresh=0.5, rx="0", ry="0"):
         bars = compute_bars([cpu_util, gpu_util, gpu_mem, mem_util], ticks=ticks)
 
         # render bars (and auxiliary measurements)
-        render(win, bars[0], [bars[3], gpu_temp, bars[1], bars[2]], rx=rx, ry=ry)
+        render(
+            stdscr, win, bars[0], [bars[3], gpu_temp, bars[1], bars[2]], rx=rx, ry=ry
+        )
 
         # wait for refresh
         time.sleep(refresh)
     return
 
 
-def render(win, cpu, gpu_mem, rx="0", ry="0"):
+def render(stdscr, win, cpu, gpu_mem, rx="0", ry="0"):
     """
     Writes bars (strings) to STDOUT, resets cursor to rx, ry
     """
 
-    # write bars to STDOUT
+    # write bars to STDOUT (grab current cursor position)
     for i, b in enumerate(itertools.zip_longest(cpu, gpu_mem, fillvalue="")):
         win.addstr(
-            i,
-            0,
+            i + 1,
+            1,
             " ".join(
                 [
                     "CPU",
@@ -95,7 +125,10 @@ def render(win, cpu, gpu_mem, rx="0", ry="0"):
                 ]
             ),
         )
+
+    # refresh the window and restore cursor position
     win.refresh()
+    # curses.endwin()
     return
 
 
@@ -174,9 +207,11 @@ if __name__ == "__main__":
     For debugging only
     """
     import random
+
+    # initialize curses
+    stdscr = curses.initscr()
     module_start()
-    #curses.wrapper(module_start)
     while True:
-        pass
-        #print(random.randint(1, 100))
+        print(random.randint(1, 100))
+        time.sleep(0.25)
     raise SystemExit(0)
