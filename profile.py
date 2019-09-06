@@ -2,10 +2,13 @@
 Prints various performance metrics of your system in real-time
 """
 
+import curses
 import itertools
 import numpy as np
+import shutil
 import subprocess
 import time
+import threading
 
 CPU_STAT = (
     "cat /proc/stat | grep 'cpu[0-9]' | awk {'print $2, $3, $4, $5, $6, $7, $8, $9'}"
@@ -15,14 +18,37 @@ MEM_STAT = "free -m | grep m | awk {'print $2, $3'}"
 GPU_COL = [" RAM", " TMP", " GPU", "VRAM"]
 
 
-def module_start():
+def module_start(ticks=30, refresh=0.5, ry=0):
     """
-    The Magic Sauce
+    Handler for the profiler (using curses). 
+    Params:
+    - ticks: length of bars
+    - refresh: how often we should redraw the screen (time.sleep)
+    - ry: space between the top of the terminal and profiler
     """
+
+    # initialize curses
+    stdscr = curses.initscr()
+
+    # grab CPU count
+    num_cpus = int(
+        subprocess.run(["nproc"], stdout=subprocess.PIPE).stdout.decode("utf-8")
+    )
+
+    # compute profiler placement on right side of terminal (_CPU_XX_[ticks]_VRAM_[ticks]_)
+    height = max(num_cpus, len(GPU_COL)) + 1
+    length = ticks * 2 + 19
+    rx = curses.COLS - length
+
+    # create curses window
+    win = curses.newwin(height, length, ry, rx)
+    profile(win, ticks, refresh, rx, ry)
+    p = threading.Thread(target=profile, args=(win, ticks, refresh, rx, ry))
+    p.start()
     return
 
 
-def profile(refresh=0.5):
+def profile(win, ticks, refresh=0.5, rx="0", ry="0"):
     """
     Prints CPU, RAM, and GPU utilization at refresh rate
     """
@@ -40,30 +66,36 @@ def profile(refresh=0.5):
         gpu_temp, gpu_mem, gpu_util = gpu_utilization()
 
         # compute bars
-        bars = compute_bars([cpu_util, gpu_util, gpu_mem, mem_util])
+        bars = compute_bars([cpu_util, gpu_util, gpu_mem, mem_util], ticks=ticks)
 
         # render bars (and auxiliary measurements)
-        render(bars[0], [bars[3], gpu_temp, bars[1], bars[2]])
+        render(win, bars[0], [bars[3], gpu_temp, bars[1], bars[2]], rx=rx, ry=ry)
 
         # wait for refresh
         time.sleep(refresh)
     return
 
 
-def render(cpu, gpu_mem, rx="0", ry="0"):
+def render(win, cpu, gpu_mem, rx="0", ry="0"):
     """
     Writes bars (strings) to STDOUT, resets cursor to rx, ry
-    Assumes stat order is CPU, GPU, MEM
     """
 
     # write bars to STDOUT
     for i, b in enumerate(itertools.zip_longest(cpu, gpu_mem, fillvalue="")):
-        print(
-            "CPU", str(i).rjust(2), b[0], *(GPU_COL[i], b[1]) if bool(b[1]) else ("",)
+        win.addstr(
+            i,
+            0,
+            " ".join(
+                [
+                    "CPU",
+                    str(i).rjust(2),
+                    b[0],
+                    " ".join((GPU_COL[i], b[1])) if bool(b[1]) else "",
+                ]
+            ),
         )
-
-    # reset cursor position
-    print("\033[" + rx + ";" + ry + "H")
+    win.refresh()
     return
 
 
@@ -101,7 +133,7 @@ def gpu_utilization():
         .split(" ")
     )
     mem_utilization = int(mem_used.strip("MiB")) / int(mem_total.strip("MiB"))
-    return float(temp[:-1]), mem_utilization, float(gpu_utilization[:-2])
+    return temp[:-1], mem_utilization, float(gpu_utilization[:-2])
 
 
 def cpu_utilization(old):
@@ -141,5 +173,5 @@ if __name__ == "__main__":
     """
     For debugging only
     """
-    profile()
+    curses.wrapper(module_start())
     raise SystemExit(0)
