@@ -43,9 +43,9 @@ def module_start(ticks=30, refresh=0.5, ry=0):
     # create curses window
     win = curses.newwin(height, length, ry, rx)
     profile(win, ticks, refresh, rx, ry)
-    p = threading.Thread(target=profile, args=(win, ticks, refresh, rx, ry))
-    p.start()
-    return
+    #p = threading.Thread(target=profile, args=(win, ticks, refresh, rx, ry))
+    #p.start()
+    return stdscr
 
 
 def profile(win, ticks, refresh=0.5, rx="0", ry="0"):
@@ -99,7 +99,7 @@ def render(win, cpu, gpu_mem, rx="0", ry="0"):
     return
 
 
-def compute_bars(metrics, ticks=30):
+def compute_bars(metrics, ticks=30, buf=1.03):
     """
     Return bars for the utilization of a given metrics
     """
@@ -110,14 +110,14 @@ def compute_bars(metrics, ticks=30):
         if type(metric) is list:
             bar = []
             for m in metric:
-                b = "[" + "|" * int(ticks * m) + " " * int(ticks * (1.03 - m)) + "]"
+                b = "[" + "|" * int(ticks * m) + " " * int(ticks * (buf - m)) + "]"
                 bar.append(b)
             bars.append(bar)
         else:
             bars.append(
                 "["
                 + "|" * int(ticks * metric)
-                + " " * int(ticks * (1.03 - metric))
+                + " " * int(ticks * (buf - metric))
                 + "]"
             )
     return bars
@@ -173,5 +173,10 @@ if __name__ == "__main__":
     """
     For debugging only
     """
-    curses.wrapper(module_start())
+    import random
+    module_start()
+    #curses.wrapper(module_start)
+    while True:
+        pass
+        #print(random.randint(1, 100))
     raise SystemExit(0)
