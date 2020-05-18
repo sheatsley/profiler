@@ -292,6 +292,9 @@ class StdOutWrapper:
         self.queue.clear()
         return out
 
+    # forcibly empty the queue
+    flush = read
+
 
 if __name__ == "__main__":
     """
