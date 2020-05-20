@@ -6,14 +6,14 @@
 
 Performance Profiler is a real-time CPU and GPU performance monitor for
 Unix-like operating systems. Visually inspired by
-[top](https://en.wikipedia.org/wiki/Top_(software), Performance Profiler shows
+[top](https://en.wikipedia.org/wiki/Top_(software)), Performance Profiler shows
 CPU, GPU, and RAM utilizations with a bar-like style. At its core, this script
 is basically fancy parsers for
 [/proc/stat](http://man7.org/linux/man-pages/man5/proc.5.html),
 [free](http://man7.org/linux/man-pages/man1/free.1.html), and
 [nvidia-smi](https://developer.download.nvidia.com/compute/DCGM/docs/nvidia-smi-367.38.pdf).
 It relies on
-[curses](https://en.wikipedia.org/wiki/Curses_(programming_library) for
+[curses](https://en.wikipedia.org/wiki/Curses_(programming_library)) for
 manipulating the terminal.
 
 Performance Profiler shows popular system performance metrics alongside output
